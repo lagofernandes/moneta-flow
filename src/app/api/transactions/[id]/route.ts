@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
 import { transactions, categories } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { auth } from '@/auth';
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Salário": "#10b981",
@@ -20,6 +21,11 @@ const CATEGORY_COLORS: Record<string, string> = {
 // PUT /api/transactions/[id]
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
     const body = await req.json();
     const { description, amount, type, status, category, date } = body;
@@ -58,7 +64,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     const [updatedTx] = await db
       .update(transactions)
       .set(updateValues)
-      .where(eq(transactions.id, id))
+      .where(and(eq(transactions.id, id), eq(transactions.userId, session.user.id)))
       .returning();
 
     if (!updatedTx) {
@@ -86,11 +92,16 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 // DELETE /api/transactions/[id]
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { id } = await params;
 
     const [deletedTx] = await db
       .delete(transactions)
-      .where(eq(transactions.id, id))
+      .where(and(eq(transactions.id, id), eq(transactions.userId, session.user.id)))
       .returning();
 
     if (!deletedTx) {

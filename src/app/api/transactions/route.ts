@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/db';
-import { transactions, categories, users } from '@/db/schema';
+import { transactions, categories } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
+import { auth } from '@/auth';
 
 const CATEGORY_COLORS: Record<string, string> = {
   "Salário": "#10b981",
@@ -20,7 +21,13 @@ const CATEGORY_COLORS: Record<string, string> = {
 // GET /api/transactions
 export async function GET() {
   try {
-    const allTransactions = await db.query.transactions.findMany({
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const userTransactions = await db.query.transactions.findMany({
+      where: eq(transactions.userId, session.user.id),
       orderBy: [desc(transactions.date)],
       with: {
         category: {
@@ -31,7 +38,7 @@ export async function GET() {
       },
     });
 
-    const formatted = allTransactions.map((tx) => {
+    const formatted = userTransactions.map((tx) => {
       const categoryName = tx.category?.name || 'Outros';
       const parentCategoryName = (tx.category as any)?.parent?.name || undefined;
       const color = tx.category?.color || CATEGORY_COLORS[categoryName] || '#64748b';
@@ -61,22 +68,13 @@ export async function GET() {
 // POST /api/transactions
 export async function POST(req: Request) {
   try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await req.json();
     const { description, amount, type, status, category, bank, date } = body;
-
-    // Get default demo user
-    let user = await db.query.users.findFirst({
-      where: eq(users.email, 'demo@monetaflow.com'),
-    });
-
-    if (!user) {
-      const [newUser] = await db.insert(users).values({
-        name: 'Usuário Demo',
-        email: 'demo@monetaflow.com',
-        passwordHash: 'demo_password_hash',
-      }).returning();
-      user = newUser;
-    }
 
     // Find or create category
     let categoryRecord = null;
@@ -99,7 +97,7 @@ export async function POST(req: Request) {
     const txDate = date ? new Date(date) : new Date();
 
     const [insertedTx] = await db.insert(transactions).values({
-      userId: user.id,
+      userId: session.user.id,
       categoryId: categoryRecord ? categoryRecord.id : null,
       description,
       amount: String(amount),

@@ -29,6 +29,20 @@
       "when": 1786414295231,
       "tag": "0003_magical_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786589371255,
+      "tag": "0004_handy_luke_cage",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786675901130,
+      "tag": "0005_wet_jack_murdock",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { UploadCloud, FileText, FileSpreadsheet, Loader2, Sparkles, CheckCircle, AlertTriangle } from "lucide-react";
@@ -22,6 +22,27 @@ export function InvoiceUploadModal({ open, onOpenChange }: InvoiceUploadModalPro
   const [error, setError] = useState<string | null>(null);
   const [extractedItems, setExtractedItems] = useState<CategorizedInvoiceItem[] | null>(null);
   const [importedCount, setImportedCount] = useState<number | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const [processingStatus, setProcessingStatus] = useState("");
+  const processingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Progressive loading messages when processing takes long
+  useEffect(() => {
+    if (isProcessing) {
+      setProcessingStatus("Analisando fatura...");
+
+      const timers = [
+        setTimeout(() => setProcessingStatus("Ainda analisando... A IA está demorando um pouco mais que o normal."), 8000),
+        setTimeout(() => setProcessingStatus("Tentando novamente a análise com IA... Aguarde mais um momento."), 20000),
+        setTimeout(() => setProcessingStatus("Utilizando extração local como alternativa. Quase lá..."), 40000),
+      ];
+
+      return () => {
+        timers.forEach(clearTimeout);
+        setProcessingStatus("");
+      };
+    }
+  }, [isProcessing]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -52,6 +73,7 @@ export function InvoiceUploadModal({ open, onOpenChange }: InvoiceUploadModalPro
 
       if (result.success && result.items) {
         setExtractedItems(result.items);
+        setWarnings(result.warnings || []);
       } else {
         setError(result.error || "Erro ao processar arquivo da fatura.");
       }
@@ -76,6 +98,7 @@ export function InvoiceUploadModal({ open, onOpenChange }: InvoiceUploadModalPro
     setError(null);
     setExtractedItems(null);
     setImportedCount(null);
+    setWarnings([]);
   };
 
   return (
@@ -108,7 +131,9 @@ export function InvoiceUploadModal({ open, onOpenChange }: InvoiceUploadModalPro
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <Loader2 className="w-5 h-5 text-emerald-500 animate-spin" />
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Analisando com IA (Gemini Flash)...</span>
+                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300 transition-all duration-300">
+                      {processingStatus || "Analisando fatura..."}
+                    </span>
                   </div>
                 </div>
                 {/* Skeletons */}
@@ -129,11 +154,10 @@ export function InvoiceUploadModal({ open, onOpenChange }: InvoiceUploadModalPro
               <div
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-2xl p-8 text-center flex flex-col items-center justify-center transition-all ${
-                  file
-                    ? "border-emerald-500/60 bg-emerald-500/5"
-                    : "border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40"
-                }`}
+                className={`border-2 border-dashed rounded-2xl p-8 text-center flex flex-col items-center justify-center transition-all ${file
+                  ? "border-emerald-500/60 bg-emerald-500/5"
+                  : "border-slate-300 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40"
+                  }`}
               >
                 <input
                   type="file"
@@ -212,6 +236,7 @@ export function InvoiceUploadModal({ open, onOpenChange }: InvoiceUploadModalPro
               fileName={file?.name || "Fatura"}
               onConfirmSuccess={handleConfirmSuccess}
               onCancel={resetModal}
+              warnings={warnings}
             />
           </div>
         )}

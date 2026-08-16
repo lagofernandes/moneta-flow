@@ -65,11 +65,11 @@ ${rawText ? rawText.slice(0, 15000) : 'Analise o arquivo PDF anexo.'}`;
       installment: { type: Type.STRING, description: 'Parcela XX/YY ou null', nullable: true },
     };
 
-    const response = await ai.models.generateContent({
+    const requestConfig = {
       model: 'gemini-flash-latest',
       contents,
       config: {
-        responseMimeType: 'application/json',
+        responseMimeType: 'application/json' as const,
         responseSchema: {
           type: Type.ARRAY,
           description: 'Lista de compras da fatura com parcelas, bancos e categorias',
@@ -80,53 +80,78 @@ ${rawText ? rawText.slice(0, 15000) : 'Analise o arquivo PDF anexo.'}`;
           },
         },
       },
-    });
+    };
 
-    if (response.text) {
-      const parsed = JSON.parse(response.text);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        console.log('[PDF Parser] ✅ Extraído via Gemini Flash:', parsed.length, 'itens (antes do filtro)');
+    // Retry logic for transient 503/429 errors
+    const MAX_RETRIES = 3;
+    let lastError: unknown = null;
 
-        const filtered = parsed
-          .filter((item: any) => {
-            const desc = String(item.description || '');
-            const numAmt = Number(item.amount) || 0;
-            if (numAmt === 0) return false;
-            if (isNonExpensePhrase(desc)) return false;
-            return true;
-          })
-          .map((item: any, index: number) => {
-            const inst = item.installment ? String(item.installment).trim() : null;
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const response = await ai.models.generateContent(requestConfig);
 
-            let itemDate = item.date || defaultInvoiceDate;
-            if (inst && inst.includes('/')) {
-              itemDate = defaultInvoiceDate;
-            }
+        if (response.text) {
+          const parsed = JSON.parse(response.text);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            console.log('[PDF Parser] ✅ Extraído via Gemini Flash:', parsed.length, 'itens (antes do filtro)');
 
-            return {
-              id: `pdf-${index}-${Date.now()}`,
-              date: itemDate,
-              description: String(item.description || 'Compra sem descrição').trim(),
-              amount: Number(item.amount),
-              bank: item.bank ? String(item.bank).trim() : detectedBank,
-              installment: inst,
-              categoryId: null,
-              categoryName: null,
-              provenance: undefined,
-              confidence: undefined,
-            };
-          });
+            const filtered = parsed
+              .filter((item: any) => {
+                const desc = String(item.description || '');
+                const numAmt = Number(item.amount) || 0;
+                if (numAmt === 0) return false;
+                if (isNonExpensePhrase(desc)) return false;
+                return true;
+              })
+              .map((item: any, index: number) => {
+                const inst = item.installment ? String(item.installment).trim() : null;
 
-        return filtered;
+                let itemDate = item.date || defaultInvoiceDate;
+                if (inst && inst.includes('/')) {
+                  itemDate = defaultInvoiceDate;
+                }
+
+                return {
+                  id: `pdf-${index}-${Date.now()}`,
+                  date: itemDate,
+                  description: String(item.description || 'Compra sem descrição').trim(),
+                  amount: Number(item.amount),
+                  bank: item.bank ? String(item.bank).trim() : detectedBank,
+                  installment: inst,
+                  categoryId: null,
+                  categoryName: null,
+                  provenance: undefined,
+                  confidence: undefined,
+                };
+              });
+
+            return filtered;
+          }
+        }
+        break; // Success but no items — don't retry
+      } catch (err: unknown) {
+        lastError = err;
+        const errorMsg = (err as Error).message || String(err);
+        const isTransient = errorMsg.includes('503') || errorMsg.includes('UNAVAILABLE') || errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED');
+
+        if (isTransient && attempt < MAX_RETRIES) {
+          const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+          console.log(`[PDF Parser] ⏳ Tentativa ${attempt}/${MAX_RETRIES} falhou (${isTransient ? 'servidor sobrecarregado' : 'erro'}). Retentando em ${delay / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+
+        if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
+          console.log('[PDF Parser] ℹ️ Cota da API do Gemini atingida. Utilizando parser local.');
+        } else {
+          console.log(`[PDF Parser] ℹ️ Erro na API Gemini após ${attempt} tentativa(s), utilizando parser local. Detalhes:`, errorMsg);
+        }
       }
     }
   } catch (err: unknown) {
     const errorMsg = (err as Error).message || String(err);
-    if (errorMsg.includes('429') || errorMsg.includes('RESOURCE_EXHAUSTED')) {
-      console.log('[PDF Parser] ℹ️ Cota da API do Gemini atingida. Utilizando parser local.');
-    } else {
-      console.log('[PDF Parser] ℹ️ Erro na API Gemini, utilizando parser local. Detalhes:', errorMsg);
-    }
+    console.log('[PDF Parser] ℹ️ Erro inesperado no parser Gemini:', errorMsg);
   }
   return null;
 }
+

@@ -12,9 +12,15 @@ export async function processInvoiceFileAction(formData: FormData) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const items = await processInvoiceFileService(buffer, fileName);
+    const result = await processInvoiceFileService(buffer, fileName);
 
-    return { success: true, items, fileName: file.name, totalCount: items.length };
+    return {
+      success: true,
+      items: result.items,
+      fileName: file.name,
+      totalCount: result.items.length,
+      warnings: result.warnings,
+    };
   } catch (err: unknown) {
     const errorMsg = (err as Error).message || "Erro interno ao processar a fatura.";
     console.error("[Invoice Server Action] Error processing file:", errorMsg);

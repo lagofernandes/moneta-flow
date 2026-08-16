@@ -42,9 +42,11 @@ export function fallbackProximityParser(text: string, bankName = 'Outros'): Pars
   while ((dateMatch = dateRegex.exec(text)) !== null) {
     const dateStr = dateMatch[1];
     const startIndex = dateMatch.index + dateMatch[0].length;
-    const snippet = text.slice(startIndex, startIndex + 200);
+    const restOfText = text.slice(startIndex, startIndex + 150);
+    const lineEndMatch = restOfText.match(/[\r\n]/);
+    const snippet = lineEndMatch ? restOfText.slice(0, lineEndMatch.index) : restOfText;
 
-    const amountRegex = /R\$\s*([\-\+]?\d{1,3}(?:\.\d{3})*,\d{2})/;
+    const amountRegex = /(?:R\$\s*)?([\-\+]?\d{1,3}(?:\.\d{3})*,\d{2})/;
     const amountMatch = amountRegex.exec(snippet);
 
     if (amountMatch) {
@@ -68,15 +70,19 @@ export function fallbackProximityParser(text: string, bankName = 'Outros'): Pars
       let cleanDesc = rawDesc
         .replace(/^[\s\:\-\.\_\,\;\+]+/, '')
         .replace(/[\s\:\-\.\_\,\;\+]+$/, '')
+        .replace(/(?:\b|^)([a-z])(?:\s+([a-z]))+(?:\b|$)/gi, (match) => match.replace(/\s+/g, '')) // Remove weird PDF kerning spaces like U B E R
         .replace(/\s+/g, ' ')
         .trim();
 
       if (isNonExpensePhrase(cleanDesc)) continue;
 
-      const isNegative = rawAmount.includes('-') || cleanDesc.toLowerCase().includes('cancelamento') || cleanDesc.toLowerCase().includes('estorno');
       let numStr = rawAmount.replace('-', '').replace(/\./g, '').replace(',', '.');
-      let numAmount = parseFloat(numStr);
-      if (isNegative) numAmount = -numAmount;
+      let numAmount = Math.abs(parseFloat(numStr)); // Default to positive for all expenses
+
+      const isRefund = cleanDesc.toLowerCase().includes('cancelamento') || cleanDesc.toLowerCase().includes('estorno') || cleanDesc.toLowerCase().includes('crédito');
+      if (isRefund) {
+        numAmount = -numAmount;
+      }
 
       const itemKey = `${cleanDesc.toUpperCase()}-${numAmount}`;
       if (processedMatches.has(itemKey)) continue;

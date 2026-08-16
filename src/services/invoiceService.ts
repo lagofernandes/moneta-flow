@@ -17,7 +17,12 @@ export async function getOrCreateUserId(): Promise<string> {
   return newUser.id;
 }
 
-export async function processInvoiceFileService(buffer: Buffer, fileName: string) {
+export interface ProcessInvoiceResult {
+  items: CategorizedInvoiceItem[];
+  warnings: string[];
+}
+
+export async function processInvoiceFileService(buffer: Buffer, fileName: string): Promise<ProcessInvoiceResult> {
   const userId = await getOrCreateUserId();
   const userCategories = await db
     .select({ id: categories.id, name: categories.name })
@@ -43,7 +48,19 @@ export async function processInvoiceFileService(buffer: Buffer, fileName: string
   }
 
   const categorizedItems = await categorizeInvoiceItems(userId, parsedItems);
-  return categorizedItems;
+
+  // Build warnings for the user
+  const warnings: string[] = [];
+  const uncategorizedCount = categorizedItems.filter(i => !i.categoryId).length;
+  const totalCount = categorizedItems.length;
+
+  if (uncategorizedCount === totalCount) {
+    warnings.push("A categorização automática por IA não está disponível no momento. Todos os itens precisam de revisão manual das categorias.");
+  } else if (uncategorizedCount > 0) {
+    warnings.push(`${uncategorizedCount} de ${totalCount} lançamentos não puderam ser categorizados pela IA e estão marcados como "Pendente". Revise as categorias antes de importar.`);
+  }
+
+  return { items: categorizedItems, warnings };
 }
 
 export async function confirmInvoiceImportService(items: CategorizedInvoiceItem[], saveRules = true) {

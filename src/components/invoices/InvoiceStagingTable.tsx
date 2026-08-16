@@ -13,6 +13,8 @@ import {
   Check,
   X,
   CreditCard,
+  Info,
+  RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTransactions } from "@/context/TransactionContext";
@@ -22,9 +24,8 @@ interface InvoiceStagingTableProps {
   fileName: string;
   onConfirmSuccess: (count: number) => void;
   onCancel: () => void;
+  warnings?: string[];
 }
-
-
 
 const BANKS_LIST = [
   "Itaú",
@@ -50,6 +51,7 @@ export function InvoiceStagingTable({
   fileName,
   onConfirmSuccess,
   onCancel,
+  warnings = [],
 }: InvoiceStagingTableProps) {
   const [items, setItems] = useState<
     Array<CategorizedInvoiceItem & { selected: boolean }>
@@ -167,6 +169,11 @@ export function InvoiceStagingTable({
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {items.length} lançamentos extraídos da fatura
+              {items.filter(i => i.amount < 0).length > 0 && (
+                <span className="text-emerald-600 dark:text-emerald-400 ml-1">
+                  ({items.filter(i => i.amount < 0).length} estorno{items.filter(i => i.amount < 0).length > 1 ? 's' : ''})
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -180,6 +187,20 @@ export function InvoiceStagingTable({
           </div>
         </div>
       </div>
+
+      {/* Categorization Warnings */}
+      {warnings.length > 0 && (
+        <div className="flex items-start gap-3 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20">
+          <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <div className="flex flex-col gap-1">
+            {warnings.map((warning, i) => (
+              <p key={i} className="text-xs text-amber-700 dark:text-amber-400">
+                {warning}
+              </p>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Table Container */}
       <div className="max-h-[380px] overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
@@ -206,11 +227,10 @@ export function InvoiceStagingTable({
             {items.map((item) => (
               <tr
                 key={item.id}
-                className={`transition-colors ${
-                  item.selected
+                className={`transition-colors ${item.selected
                     ? "bg-slate-50/50 dark:bg-slate-900/30 hover:bg-slate-100/60 dark:hover:bg-slate-900/50"
                     : "opacity-40 bg-slate-100/20 dark:bg-slate-950"
-                }`}
+                  }`}
               >
                 <td className="p-3 text-center">
                   <input
@@ -236,10 +256,15 @@ export function InvoiceStagingTable({
                         {item.installment}
                       </span>
                     )}
+                    {item.amount < 0 && (
+                      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        <RotateCcw className="w-2.5 h-2.5" /> Estorno
+                      </span>
+                    )}
                   </div>
                 </td>
-                <td className="p-3 whitespace-nowrap font-medium text-slate-900 dark:text-slate-100 font-mono">
-                  R$ {item.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                <td className={`p-3 whitespace-nowrap font-medium font-mono ${item.amount < 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                  {item.amount < 0 ? '- ' : ''}R$ {Math.abs(item.amount).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                 </td>
                 <td className="p-3">
                   <select

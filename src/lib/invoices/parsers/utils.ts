@@ -2,12 +2,21 @@ export const isNonExpensePhrase = (desc: string) => {
   const lower = desc.toLowerCase().trim();
   if (!lower || lower.length < 3) return true;
   const nonExpenseKeywords = [
+    // Pagamentos da fatura
     'pagamento efetuado', 'pagto debito', 'pagamento de fatura', 'pagamento recibo',
-    'pagamento titulo', 'pagamento efetuad', 'subtotal', 'total da fatura',
+    'pagamento titulo', 'pagamento efetuad', 'pagto fatura', 'pgto fatura',
+    'pagamento fatura', 'pagto automatico', 'pagamento automatico',
+    'pagto débito automático', 'pagamento débito', 'pag fatura',
+    // Totais e resumos
+    'subtotal', 'total da fatura', 'total fatura',
     'total de compras', 'soma dos lançamentos', 'resumo da fatura',
-    'saldo anterior', 'total do cartão', 'total cartao',
+    'saldo anterior', 'total do cartão', 'total cartao', 'total lançamentos',
+    'crédito anterior', 'credito anterior', 'saldo devedor',
+    // Parcelamento futuro
     'compras parceladas - próximas faturas', 'próxima fatura', 'demais faturas',
-    'total para próximas faturas', 'próximas faturas',
+    'total para próximas faturas', 'próximas faturas', 'proximas faturas',
+    // Encargos e taxas informativas
+    'encargos financeiros', 'juros rotativos', 'iof',
   ];
   return nonExpenseKeywords.some((kw) => lower.includes(kw));
 };

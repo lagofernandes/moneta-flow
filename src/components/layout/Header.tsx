@@ -1,13 +1,26 @@
 "use client";
 
 import React from "react";
-import { Wallet, Bell } from "lucide-react";
+import { Wallet, Bell, LogOut } from "lucide-react";
+import { signOut, useSession } from "next-auth/react";
 import { useTransactions } from "@/context/TransactionContext";
 import { useTheme } from "@/context/ThemeContext";
+
+function getInitials(name?: string | null) {
+  if (!name) return "US";
+  const parts = name.trim().split(" ");
+  if (parts.length >= 2) return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+  return name.substring(0, 2).toUpperCase();
+}
 
 export function Header() {
   const { setIsSettingsOpen } = useTransactions();
   const { theme } = useTheme();
+  const { data: session } = useSession();
+
+  const user = session?.user;
+  const firstName = user?.name ? user.name.split(" ")[0] : "Usuário";
+  const initials = getInitials(user?.name);
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/40 bg-white/80 dark:bg-slate-950/80 backdrop-blur-xl transition-colors duration-200">
@@ -37,13 +50,21 @@ export function Header() {
             onClick={() => setIsSettingsOpen(true)}
           >
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-semibold border border-slate-300 dark:border-slate-700 text-xs hover:border-emerald-500 transition-colors">
-              VF
+              {initials}
             </div>
             <div className="hidden md:flex flex-col text-left">
-              <span className="text-xs font-medium text-slate-800 dark:text-slate-200">Vinicius</span>
+              <span className="text-xs font-medium text-slate-800 dark:text-slate-200">{firstName}</span>
               <span className="text-[10px] text-slate-500 dark:text-slate-400">Premium</span>
             </div>
           </div>
+
+          <button
+            onClick={() => signOut({ callbackUrl: "/login" })}
+            title="Sair"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border/50 bg-secondary/50 text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-500 hover:border-red-500/30"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
         </div>
       </div>
     </header>
